@@ -11,7 +11,7 @@ https://more-urls-here.com</textarea>
   </button>
   <script type="module">
     import { renderSVG } from './uqr.mjs';
-    import { zipSync, strToU8 } from './fflate.mjs';
+    import { Zip, ZipPassThrough, strToU8 } from './fflate.mjs';
 
     document.querySelector('#generate').addEventListener('click', () => {
       go();
@@ -19,6 +19,23 @@ https://more-urls-here.com</textarea>
 
     async function go() {
       const codes = document.querySelector('#codes').value.split(/\s/);
+
+      let chunks = [];
+      const zip = new Zip((err, dat, final) => {
+        if(!err) {
+          chunks.push(dat);
+          if (final) {
+            const a = document.createElement('a');
+            const blob = new Blob(chunks, { type: 'application/octet-stream' });
+            const url = URL.createObjectURL(blob);
+            a.href = url;
+            a.download = "qrcodes.zip";
+            a.click() 
+          }
+        } else {
+          alert(err);
+        };
+      });
 
       const a = document.createElement('a');
       let res = new Array(codes.length);
@@ -30,11 +47,12 @@ https://more-urls-here.com</textarea>
         const canvas = await svgToCanvas(svg, 300, 300);
         const dataUrl = canvas.toDataURL('image/png');
 
-        const a = document.createElement('a');
-        a.href = dataUrl;
-        a.download = "qr" + (i+1) + ".png";
-        a.click();
+        const file = new ZipPassThrough('qr' + (i+1) + '.png');
+        zip.add(file);
+        file.push(decodeBase64ToBinary(parseDataURL(dataUrl).data), true);
       }
+
+      zip.end();
     };
 
     async function svgToCanvas(svgContent, width, height) {
@@ -55,6 +73,22 @@ https://more-urls-here.com</textarea>
         const svgUrl = URL.createObjectURL(svgBlob);
         img.src = svgUrl;
       });
+    }
+
+    function parseDataURL(dataURL) {
+      const [header, data] = dataURL.split(',');
+      const mimeType = header.match(/:(.*?);/)[1];
+
+      return { mimeType, data };
+    }
+
+    function decodeBase64ToBinary(base64Data) {
+      const decodedString = atob(base64Data);
+      const binaryData = new Uint8Array(decodedString.length);
+      for (let i = 0; i < decodedString.length; i++) {
+        binaryData[i] = decodedString.charCodeAt(i);
+      }
+      return binaryData;
     }
   </script>
 </body>
